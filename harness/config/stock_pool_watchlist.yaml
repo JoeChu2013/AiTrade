@@ -1,0 +1,7 @@
+# 50 支用户自选股票池（模板）
+# 与主板精筛池结构一致；用户手动维护。
+pool_name: "用户自选池"
+target_size: 50
+stocks:
+  - { code: "300750", name: "宁德时代", sector: "电池", note: "示例" }
+  - { code: "002594", name: "比亚迪",   sector: "新能源车", note: "示例" }

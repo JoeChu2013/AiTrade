@@ -1,0 +1,133 @@
+# ============================================================================
+# AI 量化交易团队 —— Harness 主配置（统一编码版）
+# 所有"纪律"参数集中在此。护栏层读取这里的阈值，硬编码执行。
+# 改这里 = 改纪律；任何 LLM Agent 都无权改（P-14 禁止修改风控参数）。
+# ============================================================================
+
+meta:
+  team_size: 13
+  base_engine: "TradingAgents-CN"
+  decision_mode: "human_in_the_loop"
+
+# ----------------------------------------------------------------------------
+# 市场环境定级 S/A/B/C/D —— 原则一
+#   score_min/max：综合评分(0-100) → 等级（内部阈值）
+#   exposure_min/max：等级 → 固定总仓位区间(%)
+#   max_single_position_pct：该级单票上限(%)
+# ----------------------------------------------------------------------------
+regime:
+  grades:
+    S: { score_min: 80, score_max: 100, label: "偏好",     stance: "积极进攻·满配",      max_new_positions: 3, exposure_min: 80, exposure_max: 100, max_single_position_pct: 40 }
+    A: { score_min: 50, score_max: 79,  label: "利好",     stance: "中等布局·不激进加仓", max_new_positions: 2, exposure_min: 50, exposure_max: 60,  max_single_position_pct: 30 }
+    B: { score_min: 20, score_max: 49,  label: "中性偏暖", stance: "轻仓短线·快进快出",   max_new_positions: 1, exposure_min: 20, exposure_max: 30,  max_single_position_pct: 20 }
+    C: { score_min: 10, score_max: 19,  label: "中性偏凉", stance: "防守·仅管存量不新增", max_new_positions: 0, exposure_min: 10, exposure_max: 20,  max_single_position_pct: 10 }
+    D: { score_min: 0,  score_max: 9,   label: "强利空",   stance: "强制空仓",            max_new_positions: 0, exposure_min: 0,  exposure_max: 5,   max_single_position_pct: 0 }
+  d_grade_force_flat: true
+  resonance_bonus: 5          # 政策/资金/情绪三者≥阈值 → 综合分 +5（捕捉 S 级共振）
+  resonance_threshold: 70
+  weights:                    # 6 因子权重（统一"越高越偏多"）
+    index_trend: 0.30
+    breadth: 0.25
+    volume: 0.15
+    stability: 0.10
+    capital_flow: 0.12
+    sentiment: 0.08
+
+# ----------------------------------------------------------------------------
+# 止损三档制 —— 纪律 D-01
+#   enter→动作；越过 hard→升级
+# ----------------------------------------------------------------------------
+stop_loss_tiers:
+  daily:   { enter_pct: -3.0, hard_pct: -5.0,  action: "整体减仓一半",            hard_action: "当日整体清仓",     reduce_to_pct: 50 }
+  weekly:  { enter_pct: -5.0, hard_pct: -8.0,  action: "大幅降仓至总仓位≤30%",    hard_action: "清仓",            reduce_to_exposure: 30 }
+  monthly: { enter_pct: -8.0, hard_pct: -12.0, action: "全部清仓+暂停交易复盘",   hard_action: "清仓并延长暂停",  suspend_days: 5 }
+
+# ----------------------------------------------------------------------------
+# 止盈分档 —— 纪律 D-05
+# ----------------------------------------------------------------------------
+take_profit:
+  tier1_pct: 10.0           # 第一止盈位
+  tier1_reduce_pct: 50      # 到第一止盈位减半
+  trailing_drawdown_pct: 6.0  # 剩余仓位：自最高点回撤≥此值了结
+  default_stop_loss_pct: -5.0
+
+# ----------------------------------------------------------------------------
+# 仓位与持仓 —— 纪律 D-02/D-03/D-04
+# ----------------------------------------------------------------------------
+position:
+  max_holdings: 3
+  single_position_abs_cap_pct: 30.0   # 任何环境下单票绝对兜底（Fork-B=B1：min(环境档,30%)）
+  no_add_on_intraday_loss: true
+  min_conviction_to_buy: 0.6          # 原则四 B1 出手门槛
+  max_sector_holdings: 2              # E-12 同板块≤2
+
+# ----------------------------------------------------------------------------
+# 不追暴涨 —— 纪律 D-06 / E-08
+# ----------------------------------------------------------------------------
+chase_filter:
+  max_3d_gain_pct: 20.0
+  max_1d_gain_pct: 9.0
+  max_consecutive_limit_ups: 1   # ≥2 板即过滤
+
+# ----------------------------------------------------------------------------
+# 交易频率/次数 —— 纪律 D-07/D-08
+# ----------------------------------------------------------------------------
+frequency:
+  same_stock_cooldown_days: 3
+  max_roundtrips_20d: 2
+  max_new_trades_per_day: 3
+  max_total_trades_per_day: 5
+  stop_loss_exempt_from_limits: true
+
+# ----------------------------------------------------------------------------
+# 七大交易时段 —— doc08
+# ----------------------------------------------------------------------------
+time_segments:
+  - { id: auction,      start: "09:15", end: "09:25", trade: false, buy: false, note: "集合竞价只观察" }
+  - { id: open_confirm, start: "09:25", end: "09:30", trade: false, buy: false, note: "确认高低开" }
+  - { id: early,        start: "09:30", end: "10:00", trade: true,  buy: false, note: "早盘主力窗口·谨慎不买(Fork-B=B1)" }
+  - { id: morning,      start: "10:00", end: "11:30", trade: true,  buy: true,  note: "次优买入区间" }
+  - { id: noon,         start: "11:30", end: "13:00", trade: false, buy: false, note: "午间不交易" }
+  - { id: afternoon,    start: "13:00", end: "14:30", trade: true,  buy: true,  note: "最后买入窗口" }
+  - { id: close,        start: "14:30", end: "15:00", trade: true,  buy: false, note: "尾盘只卖不买" }
+no_new_after: "14:30"
+liangbi_attention_threshold: 1.5
+
+# ----------------------------------------------------------------------------
+# 买入条件复合闸 —— doc08
+# ----------------------------------------------------------------------------
+buy_condition:
+  min_regime_grade: "B"      # 环境 ≥ B
+  max_hard_exclusions: 1     # 硬排除命中 ≤1（≥2 → 只可观察）
+  min_risk_reward: 2.0       # R:R ≥ 2:1
+
+# ----------------------------------------------------------------------------
+# 排除规则阈值 —— doc04 v2（E-01~E-13）
+# ----------------------------------------------------------------------------
+exclusion:
+  e01_min_gross_margin: 20.0
+  e01_decline_quarters: 2
+  e02_pe_industry_mult: 2.0
+  e04_unlock_ratio: 5.0
+  e04_top_pledge: 70.0
+  e05_min_amount: 50000000      # 5000万
+  e05_min_turnover: 0.3
+  e10_pre_record_gain: 5.0
+  e10_ex_cooldown_days: 3       # 除权日当天+后3日
+  e13_negative_news: 80.0
+
+# ----------------------------------------------------------------------------
+# 股票池
+# ----------------------------------------------------------------------------
+pool:
+  main_board_file: "stock_pool_main.yaml"
+  watchlist_file: "stock_pool_watchlist.yaml"
+  analyze_only_from_pool: true
+
+# ----------------------------------------------------------------------------
+# 深析引擎透传
+# ----------------------------------------------------------------------------
+deep_dive:
+  selected_analysts: ["market", "social", "news", "fundamentals"]
+  max_debate_rounds: 1
+  max_risk_discuss_rounds: 1

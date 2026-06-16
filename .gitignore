@@ -1,0 +1,28 @@
+# 第三方开源依赖（不二次分发，使用者自行 clone）
+TradingAgents-CN/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 运行产物
+results/
+reports/
+*.log
+
+# 密钥/环境
+.env
+.env.*
+
+# 编辑器/系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Claude Code 本地配置/会话
+.claude/

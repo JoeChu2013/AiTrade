@@ -1,0 +1,7 @@
+# Harness 纪律编排层核心依赖（确定性部分，无需 LLM）
+PyYAML>=6.0
+
+# 真实深析引擎（可选）：需另行安装开源 TradingAgents-CN 的依赖
+#   git clone https://github.com/hsliuping/TradingAgents-CN
+#   pip install -e ./TradingAgents-CN
+# 并配置其 .env 与模型 API key 后，把 StubDeepDiveAdapter 换为 DeepDiveAdapter。

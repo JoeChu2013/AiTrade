@@ -1,0 +1,11 @@
+# 100 支主板精筛股票池（模板，先放少量示例，按需补全到 100）
+# 字段：code 代码 / name 名称 / sector 行业 / note 备注
+# 协调器日常从这里筛选，不在池内的标的默认不分析（除非显式指定）。
+pool_name: "主板精筛池"
+target_size: 100
+stocks:
+  - { code: "600519", name: "贵州茅台", sector: "白酒", note: "示例" }
+  - { code: "600036", name: "招商银行", sector: "银行", note: "示例" }
+  - { code: "601318", name: "中国平安", sector: "保险", note: "示例" }
+  - { code: "600900", name: "长江电力", sector: "电力", note: "示例" }
+  - { code: "000333", name: "美的集团", sector: "家电", note: "示例" }
