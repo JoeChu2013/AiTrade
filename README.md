@@ -12,6 +12,75 @@
 - **B1 纪律=确定性代码**：六原则 / 12+1 排除 / 八纪律 / 时段闸 / 14 禁止行为全部硬编码，LLM 不可绕过、可审计、零幻觉。
 - **C1 协调器=第 13 角色**：统一调度，Agent 间不直接通信（黑板模式）。
 
+## 架构总览
+
+**分层架构（13 角色 + 护栏 + 黑板）**
+
+```mermaid
+flowchart TB
+  COORD["🧭 L0 协调器（第13角色 · 确定性编排）"]
+  GR["🛡️ L0.5 护栏层：六原则 · 12+1排除 · 八纪律 · 七时段+买入闸 · 14禁止<br/>（确定性代码，LLM 不可绕过）"]
+  COORD --> GR
+
+  subgraph CJ["① 采集层"]
+    direction LR
+    a1["①市场宏观"]
+    a2["②基本面"]
+    a3["③舆情新闻"]
+    a4["④市场情绪"]
+  end
+  subgraph YJ["② 研究层"]
+    direction LR
+    b1["⑤多头研究员"]
+    b2["⑥空头研究员"]
+    b3["⑦研究主管"]
+  end
+  subgraph JY["③ 交易层"]
+    direction LR
+    c1["⑩交易测算员"]
+    c2["⑪分时执行员"]
+  end
+  subgraph FK["④ 风控层"]
+    direction LR
+    d1["⑫一级风控"]
+    d2["⑬终审主管"]
+  end
+  subgraph XG["选股支撑"]
+    direction LR
+    e1["⑧选股筛选"]
+    e2["⑨股票池管理"]
+  end
+
+  GR --> CJ --> YJ --> JY --> FK
+  XG -.->|候选| CJ
+  BB["🗒️ 黑板 / 共享状态（角色间唯一通道，禁直接通信）"]
+  CJ -.-> BB
+  YJ -.-> BB
+  JY -.-> BB
+  FK -.-> BB
+```
+
+**漏斗流程（7 工作流组合 → 个股 6 阶段 → 5 选 1 评级）**
+
+```mermaid
+flowchart LR
+  WF5["WF5 市场快照<br/>定环境 S/A/B/C/D"] -->|D级| FLAT["强制空仓"]
+  WF5 -->|非D| WF7["WF7 批量筛选<br/>上百→几十"]
+  WF7 --> WF2["WF2 池内优选<br/>→3~5只"]
+  WF2 --> WF1
+  subgraph WF1["WF1 全链路深析（6 阶段）"]
+    direction LR
+    s0["0 环境"] --> s1["1 采集"] --> s2["2 多空+研报"] --> s3["3 R:R+买点"] --> s4["4 三层风控+终裁"] --> s5["5 组装存档"]
+  end
+  WF1 --> RATE{"5 选 1 评级"}
+  RATE --> R1["可适仓买入 → ⑪执行"]
+  RATE --> R2["条件满足才可买"]
+  RATE --> R3["可买但不优先"]
+  RATE --> R4["只可观察"]
+  RATE --> R5["明确不买"]
+  R1 --> WF4["每日 WF4 持仓巡检"]
+```
+
 ## 快速开始
 ```bash
 pip install -r requirements.txt          # 仅需 PyYAML（确定性核心）
