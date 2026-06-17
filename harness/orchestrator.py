@@ -291,11 +291,25 @@ class Coordinator:
 
     @staticmethod
     def _signal_to_verdict(signal: str) -> Verdict:
-        s = (signal or "").lower()
-        if any(k in s for k in ["买", "buy", "做多", "long", "加仓"]):
-            return Verdict.BUY
-        if any(k in s for k in ["卖", "sell", "清仓", "减仓", "做空", "short"]):
+        """从深析结论中解析动作。
+        注意：研报正文常同时含"买入/卖出"字样（如"何时可重新买入"），
+        故只截取结论段（最后一个决策标记之后）判定，且卖出优先，避免把 SELL 误读成 BUY。"""
+        s = signal or ""
+        markers = ["最终建议", "最终结论", "最终决策", "操作建议", "投资建议", "综合建议", "建议："]
+        pos = max((s.rfind(m) for m in markers), default=-1)
+        seg = s[pos:pos + 120] if pos >= 0 else s
+        low = seg.lower()
+        sell = any(k in seg for k in ["卖出", "清仓", "减仓", "做空", "减持"]) or \
+            any(k in low for k in ["sell", "short", "reduce"])
+        buy = any(k in seg for k in ["买入", "做多", "加仓", "增持", "建仓"]) or \
+            any(k in low for k in ["buy", "long"])
+        if sell and not buy:
             return Verdict.SELL
+        if buy and not sell:
+            return Verdict.BUY
+        if sell and buy:                       # 结论段两者都现，取最后出现者
+            return Verdict.SELL if max(seg.rfind(k) for k in ["卖出", "清仓", "减仓"]) > \
+                max(seg.rfind(k) for k in ["买入", "做多", "加仓"]) else Verdict.BUY
         return Verdict.HOLD
 
     @staticmethod

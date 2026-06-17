@@ -216,6 +216,18 @@ def test_rating_watch_two_hard():
     assert dec.buy_rating == BuyRating.WATCH, dec.rationale
 
 
+def test_signal_parser_sell_essay_not_misread_as_buy():
+    # 真实研报结论常含大量"买入"字样但结论是卖出，必须解析为卖出
+    essay = ("任何反弹都是卖出的机会而非买入的机会；何时可重新买入需等批价企稳。"
+             "### 最终结论\n最终建议：卖出（股票代码：600519）。")
+    assert Coordinator._signal_to_verdict(essay) == Verdict.SELL
+
+
+def test_signal_parser_buy_conclusion():
+    essay = "风险点：若跌破支撑应卖出。### 最终建议：买入，目标价上看。"
+    assert Coordinator._signal_to_verdict(essay) == Verdict.BUY
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

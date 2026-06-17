@@ -34,19 +34,50 @@ class BaseDeepDiveAdapter:
 class DeepDiveAdapter(BaseDeepDiveAdapter):
     """真适配器。lazy import，避免无 LLM 环境时 import 失败。"""
 
-    def __init__(self, config: dict = None):
+    # DeepSeek 默认（可被 config 覆盖）
+    DEEPSEEK_DEFAULTS = {
+        "llm_provider": "deepseek",
+        "deep_think_llm": "deepseek-chat",
+        "quick_think_llm": "deepseek-chat",
+        "backend_url": "https://api.deepseek.com",
+        "online_tools": True,
+    }
+
+    def __init__(self, config: dict = None, provider: str = "deepseek",
+                 env_path: str = None):
         self._cfg = config
+        self._provider = provider
+        self._env_path = env_path
         self._graph = None
+
+    def _load_env(self):
+        """无依赖加载 .env 到 os.environ（python-dotenv 未装也能用）。"""
+        import os
+        path = self._env_path
+        if path is None:
+            here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            path = os.path.join(here, "TradingAgents-CN", ".env")
+        if not os.path.exists(path):
+            return
+        for line in open(path, encoding="utf-8"):
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
 
     def _ensure_graph(self):
         if self._graph is not None:
             return
+        self._load_env()
         # 仅在真正深析时才加载重依赖
         from tradingagents.graph.trading_graph import TradingAgentsGraph
         from tradingagents.default_config import DEFAULT_CONFIG
 
         hcfg = load_config()["deep_dive"]
         cfg = dict(DEFAULT_CONFIG)
+        if self._provider == "deepseek":
+            cfg.update(self.DEEPSEEK_DEFAULTS)
         if self._cfg:
             cfg.update(self._cfg)
         cfg["max_debate_rounds"] = hcfg["max_debate_rounds"]
@@ -58,7 +89,12 @@ class DeepDiveAdapter(BaseDeepDiveAdapter):
 
     def analyze(self, code: str, trade_date: str) -> DeepDiveResult:
         self._ensure_graph()
-        final_state, decision = self._graph.propagate(code, trade_date)
+        g = self._graph
+        # 绕开 propagate() 中 values/updates 模式混淆的 bug：直接 invoke 编译图。
+        init_state = g.propagator.create_initial_state(code, trade_date)
+        args = g.propagator.get_graph_args(use_progress_callback=False)
+        final_state = g.graph.invoke(init_state, config=args.get("config"))
+        decision = final_state.get("final_trade_decision", "")
         reports = {
             "market": final_state.get("market_report", ""),
             "sentiment": final_state.get("sentiment_report", ""),

@@ -5,3 +5,8 @@ PyYAML>=6.0
 #   git clone https://github.com/hsliuping/TradingAgents-CN
 #   pip install -e ./TradingAgents-CN
 # 并配置其 .env 与模型 API key 后，把 StubDeepDiveAdapter 换为 DeepDiveAdapter。
+#
+# ⚠️ 版本坑：务必用其 requirements-lock.txt 的 langgraph 0.6.x 系（langgraph==0.6.7、
+#   langchain-core==0.3.76 等）。pip 默认会拉 langgraph 1.x，其 stream 格式不兼容上游
+#   propagate()，会报 "dictionary update sequence element ... length N; 2 is required"。
+#   我们的 DeepDiveAdapter 已直接 invoke 编译图、绕开该 bug，但版本仍需用 0.6.x 系。
