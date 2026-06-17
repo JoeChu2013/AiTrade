@@ -217,15 +217,22 @@ def test_rating_watch_two_hard():
 
 
 def test_signal_parser_sell_essay_not_misread_as_buy():
-    # 真实研报结论常含大量"买入"字样但结论是卖出，必须解析为卖出
+    # 正文含大量"买入"字样但结论是卖出，必须解析为卖出
     essay = ("任何反弹都是卖出的机会而非买入的机会；何时可重新买入需等批价企稳。"
              "### 最终结论\n最终建议：卖出（股票代码：600519）。")
     assert Coordinator._signal_to_verdict(essay) == Verdict.SELL
 
 
-def test_signal_parser_buy_conclusion():
-    essay = "风险点：若跌破支撑应卖出。### 最终建议：买入，目标价上看。"
+def test_signal_parser_buy_conclusion_ignores_conditional_stop_loss():
+    # 结论是买入，但句中含"止损卖出"条件句——不能误判为卖出
+    essay = "风险点：若跌破支撑应止损卖出。### 最终建议：买入，目标价上看。"
     assert Coordinator._signal_to_verdict(essay) == Verdict.BUY
+
+
+def test_signal_parser_negation_not_buy():
+    # "坚决不买入"含"买入"子串但意为不买——必须解析为卖出
+    essay = "建议：** **卖出**（或做空）。对于已持仓者立即减仓50%；对于空仓者坚决不买入。"
+    assert Coordinator._signal_to_verdict(essay) == Verdict.SELL
 
 
 def _run_all():

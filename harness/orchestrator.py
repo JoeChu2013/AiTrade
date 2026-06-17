@@ -291,28 +291,38 @@ class Coordinator:
             if not h.passed:
                 report.notes.append(f"💰 止盈 {h}")
 
-    @staticmethod
-    def _signal_to_verdict(signal: str) -> Verdict:
-        """从深析结论中解析动作。
-        注意：研报正文常同时含"买入/卖出"字样（如"何时可重新买入"），
-        故只截取结论段（最后一个决策标记之后）判定，且卖出优先，避免把 SELL 误读成 BUY。"""
+    # 动作词 → 判定（顺序无关；带否定前缀的会被跳过）
+    _ACTIONS = [("买入", Verdict.BUY), ("做多", Verdict.BUY), ("加仓", Verdict.BUY),
+                ("增持", Verdict.BUY), ("建仓", Verdict.BUY),
+                ("卖出", Verdict.SELL), ("清仓", Verdict.SELL), ("减仓", Verdict.SELL),
+                ("做空", Verdict.SELL), ("减持", Verdict.SELL),
+                ("持有", Verdict.HOLD), ("观望", Verdict.HOLD)]
+    _MARKERS = ["最终指令", "最终建议", "最终决策", "最终结论", "操作建议",
+                "投资建议", "综合建议", "决策", "建议"]
+    _NEG = "不勿禁别"
+
+    @classmethod
+    def _signal_to_verdict(cls, signal: str) -> Verdict:
+        """从深析结论解析动作。
+        难点：长文里"买入/卖出"反复出现，且有否定（"坚决不买入"）和条件句（"止损卖出"）。
+        策略：定位最后一个决策标记，取其后第一个**未被否定**的动作词为准。
+        """
+        import re
         s = signal or ""
-        markers = ["最终建议", "最终结论", "最终决策", "操作建议", "投资建议", "综合建议", "建议："]
-        pos = max((s.rfind(m) for m in markers), default=-1)
-        seg = s[pos:pos + 120] if pos >= 0 else s
-        low = seg.lower()
-        sell = any(k in seg for k in ["卖出", "清仓", "减仓", "做空", "减持"]) or \
-            any(k in low for k in ["sell", "short", "reduce"])
-        buy = any(k in seg for k in ["买入", "做多", "加仓", "增持", "建仓"]) or \
-            any(k in low for k in ["buy", "long"])
-        if sell and not buy:
-            return Verdict.SELL
-        if buy and not sell:
-            return Verdict.BUY
-        if sell and buy:                       # 结论段两者都现，取最后出现者
-            return Verdict.SELL if max(seg.rfind(k) for k in ["卖出", "清仓", "减仓"]) > \
-                max(seg.rfind(k) for k in ["买入", "做多", "加仓"]) else Verdict.BUY
-        return Verdict.HOLD
+        # 取最后一个决策标记的位置
+        pos = max((s.rfind(m) for m in cls._MARKERS), default=-1)
+        zone = s[pos:pos + 60] if pos >= 0 else s[-200:]
+        z = re.sub(r"[*\s：:]", "", zone)   # 去掉 markdown/空白/冒号
+        best = None
+        for tok, verd in cls._ACTIONS:
+            idx = z.find(tok)
+            if idx == -1:
+                continue
+            if idx > 0 and z[idx - 1] in cls._NEG:   # 跳过"不买入"等否定
+                continue
+            if best is None or idx < best[0]:
+                best = (idx, verd)
+        return best[1] if best else Verdict.HOLD
 
     @staticmethod
     def _decision(code, name, rating, conviction, *, verdict=Verdict.NO_ACTION,

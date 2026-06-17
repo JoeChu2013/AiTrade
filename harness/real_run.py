@@ -76,7 +76,7 @@ def main():
 
     code = sys.argv[1] if len(sys.argv) > 1 else "600519"
     trade_date = sys.argv[2] if len(sys.argv) > 2 else "2026-06-16"
-    name = {"600519": "贵州茅台"}.get(code, code)
+    name = {"600519": "贵州茅台", "002281": "光迅科技", "600584": "长电科技"}.get(code, code)
 
     print(f"\n{'='*72}\n真实深析：{code} {name}  trade_date={trade_date}  (DeepSeek)\n{'='*72}")
     print("调用 12-Agent 深析引擎中（数分钟）...\n")
@@ -85,7 +85,8 @@ def main():
 
     regime = grade_market({"index_trend": 52, "breadth": 50, "volume": 50,
                            "stability": 52, "capital_flow": 50, "sentiment": 50})
-    metrics = StockMetrics(code=code, name=name, sector="白酒", price=None,
+    sector = {"600519": "白酒", "002281": "光通信", "600584": "半导体"}.get(code, "")
+    metrics = StockMetrics(code=code, name=name, sector=sector, price=None,
                            is_st=False, is_suspended=False, regulatory_event=False,
                            major_incident=False, delisting_risk=False,
                            unlock_ratio=0, top_holder_pledge_ratio=0)
