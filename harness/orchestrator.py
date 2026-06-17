@@ -144,7 +144,9 @@ class Coordinator:
                                       in_buy_window, opening_allowed,
                                       critical_gap, squeezed_out)
 
-        rationale = (f"信号={dd.signal}；R:R {rr}；硬排除{screen.hard_count}条"
+        _sig = (dd.signal or "").strip().replace("\n", " ")
+        _sig = _sig[:50] + ("…" if len(_sig) > 50 else "")
+        rationale = (f"引擎动作={signal.value}（{_sig}）；R:R {rr}；硬排除{screen.hard_count}条"
                      f"{('/红线'+ '·'.join(screen.red_line_hits)) if screen.has_red_line else ''}；"
                      f"环境{regime.grade.value}级{regime.score:.0f}分；置信{conviction:.2f}。")
         if not approved:
