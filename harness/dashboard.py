@@ -8,7 +8,12 @@
 """
 from __future__ import annotations
 
+import os
+import sys
 from datetime import date
+
+# streamlit run 时脚本目录在 sys.path、项目根不在 → 手动加入项目根，保证能 import harness
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pandas as pd
 import plotly.graph_objects as go
