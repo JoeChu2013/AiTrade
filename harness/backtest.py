@@ -126,63 +126,60 @@ class DisciplineStrategy(bt.Strategy):
                         holdings += 1
 
 
-def run(universe=None, start="2024-01-01", end="2026-06-16", cash=1_000_000):
+def run(universe=None, start="2024-01-01", end="2026-06-16", cash=1_000_000,
+        stop_loss=-0.05, tp1=0.10, trailing=0.06, cap_mult=1.0, max_holdings=3,
+        label="基线", _cache={}):
     universe = universe or DEFAULT_UNIVERSE
-    print(f"加载数据：{len(universe)} 只 + 指数，{start}~{end} ...")
-    idx = _load_df(INDEX, start, end, is_index=True)
+    # 数据缓存（同区间多次调参回测复用，省抓取）
+    key = (tuple(universe), start, end)
+    if key not in _cache:
+        idx = _load_df(INDEX, start, end, is_index=True)
+        dfs = {}
+        for code in universe:
+            try:
+                df = _load_df(code, start, end)
+                if len(df) >= 80:
+                    dfs[code] = df
+            except Exception as e:
+                print(f"  跳过 {code}: {e}")
+        _cache[key] = (idx, dfs)
+    idx, dfs = _cache[key]
     regime = _regime_by_date(idx)
+    if cap_mult != 1.0:
+        for v in regime.values():
+            v["single_cap"] = min(0.5, v["single_cap"] * cap_mult)
 
     cer = bt.Cerebro(stdstats=False)
-    loaded = 0
-    for code in universe:
-        try:
-            df = _load_df(code, start, end)
-            if len(df) < 80:
-                continue
-            cer.adddata(bt.feeds.PandasData(dataname=df), name=code)
-            loaded += 1
-        except Exception as e:
-            print(f"  跳过 {code}: {e}")
-    if loaded == 0:
-        print("无可用数据，退出"); return
-    print(f"成功加载 {loaded} 只")
-
+    for code, df in dfs.items():
+        cer.adddata(bt.feeds.PandasData(dataname=df), name=code)
     cer.broker.setcash(cash)
-    cer.broker.setcommission(commission=0.0005)  # 约万5(含双边费+印花税近似)
-    cer.addstrategy(DisciplineStrategy, regime_by_date=regime)
+    cer.broker.setcommission(commission=0.0005)
+    cer.addstrategy(DisciplineStrategy, regime_by_date=regime, stop_loss=stop_loss,
+                    tp1=tp1, trailing=trailing, max_holdings=max_holdings)
     cer.addanalyzer(bt.analyzers.DrawDown, _name="dd")
     cer.addanalyzer(bt.analyzers.TradeAnalyzer, _name="ta")
     cer.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe", riskfreerate=0.0,
                     timeframe=bt.TimeFrame.Days)
     cer.addanalyzer(bt.analyzers.Returns, _name="ret")
-
     res = cer.run()[0]
     final = cer.broker.getvalue()
-
-    # 基准：指数买入持有
     bench = (idx["close"].iloc[-1] / idx["close"].iloc[0] - 1) * 100
-
     ta = res.analyzers.ta.get_analysis()
     total = ta.get("total", {}).get("closed", 0)
     won = ta.get("won", {}).get("total", 0)
     lost = ta.get("lost", {}).get("total", 0)
-    win_rate = won / total * 100 if total else 0
     avg_win = ta.get("won", {}).get("pnl", {}).get("average", 0)
     avg_loss = ta.get("lost", {}).get("pnl", {}).get("average", 0)
     pf = (won * avg_win) / abs(lost * avg_loss) if lost and avg_loss else float("inf")
-
-    print("\n" + "=" * 60)
-    print("回测结果（确定性纪律层 + MACD金叉代理入场）")
-    print("=" * 60)
-    print(f"区间：{start} ~ {end}")
-    print(f"期初 {cash:,.0f} → 期末 {final:,.0f}")
-    print(f"策略总收益：{(final/cash-1)*100:+.1f}%   |   基准(上证持有)：{bench:+.1f}%")
-    print(f"年化收益：{res.analyzers.ret.get_analysis().get('rnorm100', 0):+.1f}%")
-    print(f"最大回撤：{res.analyzers.dd.get_analysis()['max']['drawdown']:.1f}%")
     sharpe = res.analyzers.sharpe.get_analysis().get("sharperatio")
-    print(f"夏普比率：{sharpe:.2f}" if sharpe else "夏普比率：N/A")
-    print(f"交易次数：{total}   胜率：{win_rate:.1f}%   盈亏比：{pf:.2f}")
-    print(f"平均盈利 {avg_win:,.0f} / 平均亏损 {avg_loss:,.0f}")
+    return {
+        "label": label, "ret": (final / cash - 1) * 100, "bench": bench,
+        "ann": res.analyzers.ret.get_analysis().get("rnorm100", 0),
+        "dd": res.analyzers.dd.get_analysis()["max"]["drawdown"],
+        "sharpe": sharpe or 0.0, "trades": total,
+        "win": (won / total * 100 if total else 0), "pf": pf,
+        "loaded": len(dfs),
+    }
 
 
 def main():
@@ -195,8 +192,25 @@ def main():
     ap.add_argument("--start", default="2024-01-01")
     ap.add_argument("--end", default="2026-06-16")
     ap.add_argument("--cash", type=float, default=1_000_000)
+    ap.add_argument("--codes", default="", help="逗号分隔，默认 5 只深析样本")
     a = ap.parse_args()
-    run(start=a.start, end=a.end, cash=a.cash)
+    uni = a.codes.split(",") if a.codes else ["600519", "002281", "600584", "603993", "002709"]
+    print(f"回测股池：{uni}  区间 {a.start}~{a.end}\n加载数据中...")
+
+    configs = [
+        dict(label="基线(防守)", stop_loss=-0.05, tp1=0.10, trailing=0.06, cap_mult=1.0),
+        dict(label="调参A(让赢家跑)", stop_loss=-0.08, tp1=0.20, trailing=0.12, cap_mult=1.0),
+        dict(label="调参B(加仓位+让赢家跑)", stop_loss=-0.08, tp1=0.20, trailing=0.12, cap_mult=1.4),
+    ]
+    rows = [run(universe=uni, start=a.start, end=a.end, cash=a.cash, **c) for c in configs]
+    bench = rows[0]["bench"]
+    print("\n" + "=" * 78)
+    print(f"5只回测对比（{rows[0]['loaded']}只可用 | 基准上证持有 {bench:+.1f}%）")
+    print("=" * 78)
+    print(f"{'配置':<22}{'总收益':>9}{'年化':>8}{'回撤':>8}{'夏普':>7}{'交易':>6}{'胜率':>7}{'盈亏比':>8}")
+    for r in rows:
+        print(f"{r['label']:<22}{r['ret']:>+8.1f}%{r['ann']:>+7.1f}%{r['dd']:>7.1f}%"
+              f"{r['sharpe']:>7.2f}{r['trades']:>6}{r['win']:>6.1f}%{r['pf']:>8.2f}")
 
 
 if __name__ == "__main__":
