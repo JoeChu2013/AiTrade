@@ -218,6 +218,23 @@ P-13 禁止未校准数据源 ｜ P-14 禁止修改风控参数。
 
 ---
 
+## 实时监控（盘中，纸面）
+高频确定性监控，不调 LLM：拉实时行情 → 刷新持仓盈亏 → 跑止损三档/单票止损/止盈分档/时段闸
+→ 候选买点告警 → 推送指令（硬止损自动、其余待人工确认）。
+```bash
+python -m harness.monitor --cycles 3      # 单轮演示
+python -m harness.monitor --loop 30       # 盘中每 30 秒一轮
+```
+持仓存 `harness/state/positions.json`（本地）；实时行情走 sina 直连（`harness/realtime.py`）。
+
+## 路线图与开源框架选型
+- **双频架构**：高频确定性监控（风控/止损）+ 低频 LLM 深析（盘前/触发）。
+- **选股/因子研究 + 回测** → 接 [Qlib](https://github.com/microsoft/qlib)（微软，AI 量化）。
+- **执行 + A股券商实盘通道** → 接 [vn.py](https://github.com/vnpy/vnpy)（多券商网关）；轻量回测可用 [backtrader](https://github.com/mementum/backtrader)。
+- **散户无官方 API 时** → easytrader 半自动 / 券商 QMT·Ptrade 官方量化通道。
+- 定位：**Qlib 管"选什么"、vnpy 管"怎么下单"、本 harness 管"纪律与决策"。**
+- ⚠️ A 股散户自动下单受限，务必先纸面/小资金验证；本项目不替用户下单/动钱。
+
 ## 代码目录
 ```
 harness/

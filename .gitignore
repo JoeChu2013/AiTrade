@@ -26,3 +26,7 @@ Thumbs.db
 
 # Claude Code 本地配置/会话
 .claude/
+
+# 本地运行状态（持仓/流水/权益，含真实账户数据，不上传）
+harness/state/
+reports/
