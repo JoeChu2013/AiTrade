@@ -87,8 +87,13 @@ pip install -r requirements.txt          # 仅需 PyYAML（确定性核心）
 python -m harness.demo                    # 离线演示：6 阶段 + 漏斗 + 5 选 1 评级
 python -m harness.tests.test_guardrails   # 护栏单测（应 22/22 通过）
 ```
-接真实深析引擎：clone 上游 TradingAgents-CN、装其依赖、配 `.env` 与模型 key，
-再把 `StubDeepDiveAdapter` 换为 `DeepDiveAdapter`。
+接真实深析引擎：clone 上游 TradingAgents-CN、装其依赖（注意 langgraph 0.6.x 版本坑见 requirements）、
+配 `.env` 与模型 key，再把 `StubDeepDiveAdapter` 换为 `DeepDiveAdapter`（见 `harness/real_run.py`）。
+真实数据接入见 `harness/datafeed.py`（akshare：个股指标回灌 + 大盘环境）。
+
+**终审风控保守度可调**：环境变量 `RISK_CONSERVATISM` = `high`/`balanced`(默认)/`low`，
+需先应用 `harness/patches/risk_manager_conservatism.patch`（详见该目录 README）。
+实测同一只票随旋钮在"卖出↔买入"之间移动，证明原"逢分析必看空"主要是上游 prompt 的结构性保守。
 
 ---
 

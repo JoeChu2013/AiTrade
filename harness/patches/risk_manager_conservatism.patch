@@ -1,0 +1,43 @@
+diff --git a/tradingagents/agents/managers/risk_manager.py b/tradingagents/agents/managers/risk_manager.py
+index 2d76e14..b987082 100644
+--- a/tradingagents/agents/managers/risk_manager.py
++++ b/tradingagents/agents/managers/risk_manager.py
+@@ -1,5 +1,18 @@
+ import time
+ import json
++import os
++
++# 风险偏好旋钮（由 harness 通过 .env / 环境变量 RISK_CONSERVATISM 控制）
++# high=保守(原始偏空) / balanced=均衡(默认) / low=进取
++_RISK_STANCE = {
++    "high": "风险偏好：保守。保护本金优先；信息不确定时倾向持有或卖出，宁可错过也不做错。",
++    "balanced": ("风险偏好：均衡。**对称权衡上行空间与下行风险，不要在信息不确定时默认看空**；"
++                 "同时衡量'错失上涨'与'承担下跌'两类风险。只有当证据明确指向某一方向时才给出该结论："
++                 "当趋势与基本面同向向好时应正常给出买入，当估值与趋势同向恶化时才给出卖出，"
++                 "证据混杂、缺乏明确优势时才用持有。"),
++    "low": ("风险偏好：进取。在风险可控（设有明确止损）前提下，重视趋势与上行机会，"
++            "敢于在基本面/趋势支撑下给出买入；避免因过度谨慎而系统性踏空。"),
++}
+ 
+ # 导入统一日志系统
+ from tradingagents.utils.logging_init import get_logger
+@@ -34,13 +47,18 @@ def create_risk_manager(llm, memory):
+         for i, rec in enumerate(past_memories, 1):
+             past_memory_str += rec["recommendation"] + "\n\n"
+ 
++        stance = _RISK_STANCE.get(os.getenv("RISK_CONSERVATISM", "balanced").lower(),
++                                  _RISK_STANCE["balanced"])
++
+         prompt = f"""作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
+ 
++**{stance}**
++
+ 决策指导原则：
+ 1. **总结关键论点**：提取每位分析师的最强观点，重点关注与背景的相关性。
+ 2. **提供理由**：用辩论中的直接引用和反驳论点支持您的建议。
+ 3. **完善交易员计划**：从交易员的原始计划**{trader_plan}**开始，根据分析师的见解进行调整。
+-4. **从过去的错误中学习**：使用**{past_memory_str}**中的经验教训来解决先前的误判，改进您现在做出的决策，确保您不会做出错误的买入/卖出/持有决定而亏损。
++4. **从过去的错误中学习**：使用**{past_memory_str}**中的经验教训改进决策，**对称地避免两类误判——既不要错误买入而亏损，也不要错误看空/踏空而错失上涨**。
+ 
+ 交付成果：
+ - 明确且可操作的建议：买入、卖出或持有。
