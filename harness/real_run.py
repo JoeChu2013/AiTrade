@@ -76,20 +76,27 @@ def main():
 
     code = sys.argv[1] if len(sys.argv) > 1 else "600519"
     trade_date = sys.argv[2] if len(sys.argv) > 2 else "2026-06-16"
-    name = {"600519": "贵州茅台", "002281": "光迅科技", "600584": "长电科技"}.get(code, code)
+    name = {"600519": "贵州茅台", "002281": "光迅科技", "600584": "长电科技",
+            "603993": "洛阳钼业", "002709": "天赐材料"}.get(code, code)
 
     print(f"\n{'='*72}\n真实深析：{code} {name}  trade_date={trade_date}  (DeepSeek)\n{'='*72}")
     print("调用 12-Agent 深析引擎中（数分钟）...\n")
 
     dd = DeepDiveAdapter(provider="deepseek").analyze(code, trade_date)
 
-    regime = grade_market({"index_trend": 52, "breadth": 50, "volume": 50,
-                           "stability": 52, "capital_flow": 50, "sentiment": 50})
-    sector = {"600519": "白酒", "002281": "光通信", "600584": "半导体"}.get(code, "")
-    metrics = StockMetrics(code=code, name=name, sector=sector, price=None,
-                           is_st=False, is_suspended=False, regulatory_event=False,
-                           major_incident=False, delisting_risk=False,
-                           unlock_ratio=0, top_holder_pledge_ratio=0)
+    sector = {"600519": "白酒", "002281": "光通信", "600584": "半导体",
+              "603993": "有色金属", "002709": "锂电材料"}.get(code, "")
+    # B：真实大盘环境（抓不到的因子由 grader 中性 50 兜底）
+    from .datafeed import fetch_metrics, fetch_regime_factors
+    factors = fetch_regime_factors()
+    regime = grade_market(factors)
+    # A：真实个股指标回灌（技术/估值/流动性；抓不到留信息缺口）
+    metrics = fetch_metrics(code, trade_date, name=name, sector=sector)
+    print(f"[环境因子] {[(k, round(v,1)) for k,v in sorted(factors.items())]}")
+    print(f"[个股指标] close={metrics.close} ma60={metrics.ma60} "
+          f"macd_dead={metrics.macd_dead_cross} pe={metrics.pe_ttm} "
+          f"gain3d={None if metrics.gain_3d is None else round(metrics.gain_3d,1)} "
+          f"turn20={None if metrics.avg_turnover_20d is None else round(metrics.avg_turnover_20d,2)}")
     dec = Coordinator(adapter=_Cached(dd)).deep_analysis(
         code=code, metrics=metrics, regime=regime, portfolio=Portfolio(cash=1_000_000),
         trade_date=trade_date, now=datetime(2026, 6, 16, 10, 30))

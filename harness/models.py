@@ -97,6 +97,7 @@ class StockMetrics:
     gross_margin: Optional[float] = None                 # 毛利率 %
     # E-02 估值过高
     pe_ttm: Optional[float] = None
+    pb: Optional[float] = None
     industry_pe_mean: Optional[float] = None
     yoy_net_profit: Optional[float] = None               # 净利同比增长 %（≤0 视无增长）
     # E-03 技术面破位
