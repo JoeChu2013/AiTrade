@@ -71,6 +71,19 @@ def _regime_by_date(idx_df):
     return out
 
 
+class EquityCurve(bt.Analyzer):
+    """逐日记录账户权益，用于画收益曲线/单位净值/算波动率。"""
+    def start(self):
+        self.data = []
+
+    def next(self):
+        self.data.append((self.strategy.datas[0].datetime.date(0),
+                          float(self.strategy.broker.getvalue())))
+
+    def get_analysis(self):
+        return self.data
+
+
 class DisciplineStrategy(bt.Strategy):
     params = dict(regime_by_date={}, max_holdings=3, stop_loss=-0.05,
                   tp1=0.10, trailing=0.06, chase_3d=0.20, chase_1d=0.09)
@@ -85,6 +98,17 @@ class DisciplineStrategy(bt.Strategy):
         self.entry = {}
         self.peak = {}
         self.tp_done = {}
+        self.trade_log = []   # 买卖标识：{date,code,side,price,size}
+
+    def notify_order(self, order):
+        if order.status == order.Completed:
+            self.trade_log.append({
+                "date": self.datas[0].datetime.date(0).isoformat(),
+                "code": order.data._name,
+                "side": "buy" if order.isbuy() else "sell",
+                "price": float(order.executed.price),
+                "size": int(order.executed.size),
+            })
 
     def next(self):
         dt = self.datas[0].datetime.date(0)
@@ -161,9 +185,21 @@ def run(universe=None, start="2024-01-01", end="2026-06-16", cash=1_000_000,
     cer.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe", riskfreerate=0.0,
                     timeframe=bt.TimeFrame.Days)
     cer.addanalyzer(bt.analyzers.Returns, _name="ret")
+    cer.addanalyzer(EquityCurve, _name="eq")
     res = cer.run()[0]
     final = cer.broker.getvalue()
     bench = (idx["close"].iloc[-1] / idx["close"].iloc[0] - 1) * 100
+
+    # 权益曲线 / 单位净值 / 波动率
+    eq = res.analyzers.eq.get_analysis()
+    import numpy as np
+    vals = [v for _, v in eq]
+    rets = np.diff(vals) / np.array(vals[:-1]) if len(vals) > 1 else np.array([0.0])
+    vol = float(np.std(rets) * np.sqrt(252) * 100) if len(rets) else 0.0
+    equity = [{"date": d.isoformat(), "value": v, "nav": v / cash} for d, v in eq]
+    # 指数基准归一曲线（对齐到同一净值起点）
+    idx_norm = (idx["close"] / idx["close"].iloc[0]).tolist()
+    idx_dates = [d.date().isoformat() for d in idx["close"].index]
     ta = res.analyzers.ta.get_analysis()
     total = ta.get("total", {}).get("closed", 0)
     won = ta.get("won", {}).get("total", 0)
@@ -176,9 +212,11 @@ def run(universe=None, start="2024-01-01", end="2026-06-16", cash=1_000_000,
         "label": label, "ret": (final / cash - 1) * 100, "bench": bench,
         "ann": res.analyzers.ret.get_analysis().get("rnorm100", 0),
         "dd": res.analyzers.dd.get_analysis()["max"]["drawdown"],
-        "sharpe": sharpe or 0.0, "trades": total,
+        "sharpe": sharpe or 0.0, "vol": vol, "trades": total,
         "win": (won / total * 100 if total else 0), "pf": pf,
-        "loaded": len(dfs),
+        "loaded": len(dfs), "final": final, "nav": final / cash,
+        "equity": equity, "trades_log": res.trade_log,
+        "bench_curve": {"dates": idx_dates, "norm": idx_norm},
     }
 
 
