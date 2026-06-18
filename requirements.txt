@@ -10,3 +10,6 @@ PyYAML>=6.0
 #   langchain-core==0.3.76 等）。pip 默认会拉 langgraph 1.x，其 stream 格式不兼容上游
 #   propagate()，会报 "dictionary update sequence element ... length N; 2 is required"。
 #   我们的 DeepDiveAdapter 已直接 invoke 编译图、绕开该 bug，但版本仍需用 0.6.x 系。
+
+# 回测（可选）
+backtrader>=1.9.78
